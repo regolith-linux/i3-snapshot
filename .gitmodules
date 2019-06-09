@@ -1,0 +1,3 @@
+[submodule "lib/i3ipc++"]
+	path = lib/i3ipc++
+	url = https://github.com/drmgc/i3ipcpp.git
