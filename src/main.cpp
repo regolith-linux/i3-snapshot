@@ -43,7 +43,6 @@ using namespace std;
 struct TreeState {
     string outputName;
     string workspaceName;
-    size_t workspaceId = -1;
 };
 
 /**
@@ -74,10 +73,9 @@ void findWindows(const i3ipc::container_t &c, TreeState &treeState) {
     if (c.type == "output") {
         treeState.outputName = c.name;
     } else if (c.type == "workspace") {
-        treeState.workspaceId = c.id;
         treeState.workspaceName = c.name;
     } else if (isWindow(c)) {
-        if (treeState.outputName.empty() || treeState.workspaceName.empty() || treeState.workspaceId == -1) {
+        if (treeState.outputName.empty() || treeState.workspaceName.empty()) {
             cout << "Invalid tree state, aborting." << endl;
             exit(1);
         }
@@ -92,8 +90,8 @@ void findWindows(const i3ipc::container_t &c, TreeState &treeState) {
             return ch == ' ' ? '_' : ch;
         });
 
-        // Output Name, Workspace Name, Workspace Id, Window Id, Window Name
-        cout << outputEncoded << " " << workspaceEncoded << " " << treeState.workspaceId << " " << c.id << " "
+        // Output Name, Workspace Name, Window Id, Window Name
+        cout << outputEncoded << " " << workspaceEncoded << " " << c.id << " "
                   << escapedName << endl;
     }
 
@@ -114,10 +112,10 @@ void findWindows(const i3ipc::container_t &c, TreeState &treeState) {
  */
 bool
 moveWindow(const i3ipc::connection &i3conn, size_t windowId, const string &outputName, const string &workspaceName,
-           const size_t &workspaceId, const string &windowTitle, bool &debug) {
+        const string &windowTitle, bool &debug) {
     // Move workspace to output
-    // i3-msg '[workspace=" 2 <span foreground='#2aa198'></span> "]' move workspace to output "eDP-1"
-    string wsCmd = "[con_id=" + to_string(workspaceId) + "] move workspace to output " + outputName;
+    // i3-msg [workspace=" 2 <span foreground='#2aa198'></span> "] move workspace to output "eDP-1"
+    string wsCmd = "[workspace=\"" + workspaceName + "\"] move workspace to output " + outputName;
     if (debug) cout << "i3-msg " << wsCmd << endl;
 
     if (!i3conn.send_command(wsCmd)) return false;
@@ -182,17 +180,16 @@ int main(int argc, char **argv) {
     if (!inputFromTerminal()) {
         findWindows(*i3connection.get_tree(), treeState);
     } else {
-        string outputNameEnc, workspaceNameEnc, workspaceIdStr, windowIdStr, windowName;
+        string outputNameEnc, workspaceNameEnc, windowIdStr, windowName;
 
         while (!cin.eof()) {
-            cin >> outputNameEnc >> workspaceNameEnc >> workspaceIdStr >> windowIdStr >> windowName;
+            cin >> outputNameEnc >> workspaceNameEnc >> windowIdStr >> windowName;
 
             string outputName = base64_decode(outputNameEnc);
             string workspaceName = base64_decode(workspaceNameEnc);
-            size_t workspaceId = stoul(workspaceIdStr);
             size_t windowId = stoul(windowIdStr);
 
-            if (!moveWindow(i3connection, windowId, outputName, workspaceName, workspaceId, windowName, debug)) {
+            if (!moveWindow(i3connection, windowId, outputName, workspaceName, windowName, debug)) {
                 cerr << "Failed to move " << windowId << " (" << windowName << ").  Aborting." << endl;
                 return 1;
             }
