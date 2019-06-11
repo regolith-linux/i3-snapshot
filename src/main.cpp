@@ -43,6 +43,18 @@ using namespace std;
 struct TreeState {
     string outputName;
     string workspaceName;
+    size_t workspaceId;
+};
+
+enum WindowIdentifier {
+    I3_ID, WINDOW_TITLE
+};
+
+struct CommandLineOptions {
+    bool debug;
+    bool failFast;
+    bool forceOutputMode;
+    WindowIdentifier windowIdentifier;
 };
 
 /**
@@ -74,6 +86,7 @@ void findWindows(const i3ipc::container_t &c, TreeState &treeState) {
         treeState.outputName = c.name;
     } else if (c.type == "workspace") {
         treeState.workspaceName = c.name;
+        treeState.workspaceId = c.id;
     } else if (isWindow(c)) {
         if (treeState.outputName.empty() || treeState.workspaceName.empty()) {
             cout << "Invalid tree state, aborting." << endl;
@@ -81,18 +94,17 @@ void findWindows(const i3ipc::container_t &c, TreeState &treeState) {
         }
 
         string outputEncoded = base64_encode(reinterpret_cast<const unsigned char *>(treeState.outputName.c_str()),
-                                                  treeState.outputName.length());
+                                             treeState.outputName.length());
         string workspaceEncoded = base64_encode(
                 reinterpret_cast<const unsigned char *>(treeState.workspaceName.c_str()),
                 treeState.workspaceName.length());
-        string escapedName = c.name;
-        transform(escapedName.begin(), escapedName.end(), escapedName.begin(), [](char ch) {
-            return ch == ' ' ? '_' : ch;
-        });
+        string windowEncoded = base64_encode(
+                reinterpret_cast<const unsigned char *>(c.name.c_str()),
+                c.name.length());
 
-        // Output Name, Workspace Name, Window Id, Window Name
-        cout << outputEncoded << " " << workspaceEncoded << " " << c.id << " "
-                  << escapedName << endl;
+        // Output Name, Workspace Name, Workspace Id, Window Id, Window Name
+        cout << outputEncoded << " " << workspaceEncoded << " " <<  treeState.workspaceId << " " << c.id << " "
+             << windowEncoded << endl;
     }
 
     if (isValidParent(c))
@@ -112,19 +124,30 @@ void findWindows(const i3ipc::container_t &c, TreeState &treeState) {
  */
 bool
 moveWindow(const i3ipc::connection &i3conn, size_t windowId, const string &outputName, const string &workspaceName,
-        const string &windowTitle, bool &debug) {
+           size_t workspaceId, const string &windowTitle, CommandLineOptions &opts) {
     // Move workspace to output
     // i3-msg [workspace=" 2 <span foreground='#2aa198'></span> "] move workspace to output "eDP-1"
-    string wsCmd = "[workspace=\"" + workspaceName + "\"] move workspace to output " + outputName;
-    if (debug) cout << "i3-msg " << wsCmd << endl;
+    string wsCmd;
+    if (opts.windowIdentifier == I3_ID) {
+        wsCmd = "[con_id=" + to_string(workspaceId) + "] move workspace to output " + outputName;
+    } else {
+        wsCmd = "[workspace=\"" + workspaceName + "\"] move workspace to output " + outputName;
+    }
+
+    if (opts.debug) cout << "i3-msg " << wsCmd << endl;
 
     if (!i3conn.send_command(wsCmd)) return false;
 
     // Move window to workspace
-    string windowCmd =
-            "[con_id=" + to_string(windowId) + "] move container to workspace \"" + workspaceName + "\"";
+    string windowCmd;
+    // https://build.i3wm.org/docs/userguide.html#command_criteria
+    if (opts.windowIdentifier == I3_ID) {
+        windowCmd = "[con_id=" + to_string(windowId) + "] move container to workspace \"" + workspaceName + "\"";
+    } else {
+        windowCmd = "[title=\"" + windowTitle + "\"] move container to workspace \"" + workspaceName + "\"";
+    }
 
-    if (debug) cout << "i3-msg " << windowCmd << endl;
+    if (opts.debug) cout << "i3-msg " << windowCmd << endl;
 
     return i3conn.send_command(windowCmd);
 }
@@ -157,45 +180,65 @@ void printVersion() {
  * @param argv
  * @return true for debug mode
  */
-bool parseOptions(int argc, char **argv) {
-    if (argc == 2 && ((strncmp(argv[1], "-h", 2) == 0) || (strncmp(argv[1], "--help", 6) == 0))) {
-        printHelp();
-        exit(0);
-    } else if (argc == 2 && ((strncmp(argv[1], "-v", 2) == 0) || (strncmp(argv[1], "--version", 8) == 0))) {
-        printVersion();
-        exit(0);
-    } else if (argc == 2 && (strncmp(argv[1], "-d", 2) == 0)) {
-        return true;
+CommandLineOptions parseOptions(int argc, char **argv) {
+    CommandLineOptions options{};
+
+    options.debug = false;
+    options.failFast = true;
+    options.forceOutputMode = false;
+    options.windowIdentifier = I3_ID;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            printHelp();
+            exit(0);
+        } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
+            printVersion();
+            exit(0);
+        } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--continue") == 0) {
+            options.failFast = false;
+        } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
+            options.debug = true;
+        } else if (strcmp(argv[i], "-t") == 0 || strcmp(argv[i], "--title") == 0) {
+            options.windowIdentifier = WINDOW_TITLE;
+        } else if (strcmp(argv[i], "-o") == 0 || strcmp(argv[i], "--output") == 0) {
+            options.forceOutputMode = true;
+        } else {
+            cout << "Unrecognized command line option: '" << argv[i] << "'.  Aborting." << endl;
+            exit(1);
+        }
     }
 
-    return false;
+    return options;
 }
 
 int main(int argc, char **argv) {
-    bool debug = parseOptions(argc, argv);
+    CommandLineOptions opts = parseOptions(argc, argv);
 
     i3ipc::connection i3connection;
     TreeState treeState;
 
-    if (!inputFromTerminal()) {
+    if (opts.forceOutputMode || !inputFromTerminal()) {
         findWindows(*i3connection.get_tree(), treeState);
     } else {
-        string outputNameEnc, workspaceNameEnc, windowIdStr, windowName;
+        string outputNameEnc, workspaceNameEnc, workspaceIdStr, windowIdStr, windowNameEnc;
 
         while (!cin.eof()) {
-            cin >> outputNameEnc >> workspaceNameEnc >> windowIdStr >> windowName;
+            cin >> outputNameEnc >> workspaceNameEnc >> workspaceIdStr >> windowIdStr >> windowNameEnc;
 
             string outputName = base64_decode(outputNameEnc);
             string workspaceName = base64_decode(workspaceNameEnc);
+            size_t workspaceId = stoul(workspaceIdStr);
+            string windowName = base64_decode(windowNameEnc);
             size_t windowId = stoul(windowIdStr);
 
-            if (!moveWindow(i3connection, windowId, outputName, workspaceName, windowName, debug)) {
-                cerr << "Failed to move " << windowId << " (" << windowName << ").  Aborting." << endl;
-                return 1;
+            if (!moveWindow(i3connection, windowId, outputName, workspaceName, workspaceId, windowName, opts)) {
+                cerr << "Failed to move " << windowId << " (" << windowName << ")." << endl;
+
+                if (opts.failFast) return 1;
             }
         }
     }
 
     return 0;
 }
-
