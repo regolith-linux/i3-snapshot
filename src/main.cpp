@@ -43,7 +43,7 @@ using namespace std;
 struct TreeState {
     string outputName;
     string workspaceName;
-    size_t workspaceId;
+    size_t workspaceId{};
 };
 
 enum WindowIdentifier {
@@ -54,6 +54,7 @@ struct CommandLineOptions {
     bool debug;
     bool failFast;
     bool forceOutputMode;
+    bool encodeStrings;
     WindowIdentifier windowIdentifier;
 };
 
@@ -81,7 +82,7 @@ bool isValidParent(const i3ipc::container_t &c) {
  * @param c i3 container
  * @param treeState storage of current state of tree traversal.
  */
-void findWindows(const i3ipc::container_t &c, TreeState &treeState) {
+void findWindows(const i3ipc::container_t &c, TreeState &treeState, CommandLineOptions &options) {
     if (c.type == "output") {
         treeState.outputName = c.name;
     } else if (c.type == "workspace") {
@@ -93,14 +94,24 @@ void findWindows(const i3ipc::container_t &c, TreeState &treeState) {
             exit(1);
         }
 
-        string outputEncoded = base64_encode(reinterpret_cast<const unsigned char *>(treeState.outputName.c_str()),
-                                             treeState.outputName.length());
-        string workspaceEncoded = base64_encode(
-                reinterpret_cast<const unsigned char *>(treeState.workspaceName.c_str()),
-                treeState.workspaceName.length());
-        string windowEncoded = base64_encode(
-                reinterpret_cast<const unsigned char *>(c.name.c_str()),
-                c.name.length());
+        string outputEncoded;
+        string workspaceEncoded;
+        string windowEncoded;
+
+        if (options.encodeStrings) {
+            outputEncoded = base64_encode(reinterpret_cast<const unsigned char *>(treeState.outputName.c_str()),
+                                                 treeState.outputName.length());
+            workspaceEncoded = base64_encode(
+                    reinterpret_cast<const unsigned char *>(treeState.workspaceName.c_str()),
+                    treeState.workspaceName.length());
+            windowEncoded = base64_encode(
+                    reinterpret_cast<const unsigned char *>(c.name.c_str()),
+                    c.name.length());
+        } else {
+            outputEncoded = treeState.outputName;
+            workspaceEncoded = treeState.workspaceName;
+            windowEncoded = c.name;
+        }
 
         // Output Name, Workspace Name, Workspace Id, Window Id, Window Name
         cout << outputEncoded << " " << workspaceEncoded << " " <<  treeState.workspaceId << " " << c.id << " "
@@ -109,7 +120,7 @@ void findWindows(const i3ipc::container_t &c, TreeState &treeState) {
 
     if (isValidParent(c))
         for (auto &node : c.nodes)
-            findWindows(*node, treeState);
+            findWindows(*node, treeState, options);
 }
 
 /**
@@ -164,7 +175,8 @@ bool inputFromTerminal() {
 void printHelp() {
     cout
             << "Save and restore window containment in i3-wm.\n"
-            << "Usage: i3-snapshot [-d] \n"
+            << "Usage: i3-snapshot [-d] [-v] [-c] [-r] [-t] [-o]\n"
+            << "-d: debug  -v: version  -c: ignore error  -r: raw strings  -t: match window title  -o: force output mode\n"
             << "Generate a snapshot: i3-snapshot > snapshot.txt\n"
             << "Replay a snapshot: i3-snapshot < snapshot.txt"
             << endl;
@@ -186,6 +198,7 @@ CommandLineOptions parseOptions(int argc, char **argv) {
     options.debug = false;
     options.failFast = true;
     options.forceOutputMode = false;
+    options.encodeStrings = true;
     options.windowIdentifier = I3_ID;
 
     for (int i = 1; i < argc; i++) {
@@ -199,6 +212,8 @@ CommandLineOptions parseOptions(int argc, char **argv) {
             options.failFast = false;
         } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
             options.debug = true;
+        } else if (strcmp(argv[i], "-r") == 0 || strcmp(argv[i], "--rawstrings") == 0) {
+            options.encodeStrings = false;
         } else if (strcmp(argv[i], "-t") == 0 || strcmp(argv[i], "--title") == 0) {
             options.windowIdentifier = WINDOW_TITLE;
         } else if (strcmp(argv[i], "-o") == 0 || strcmp(argv[i], "--output") == 0) {
@@ -219,7 +234,7 @@ int main(int argc, char **argv) {
     TreeState treeState;
 
     if (opts.forceOutputMode || !inputFromTerminal()) {
-        findWindows(*i3connection.get_tree(), treeState);
+        findWindows(*i3connection.get_tree(), treeState, opts);
     } else {
         string outputNameEnc, workspaceNameEnc, workspaceIdStr, windowIdStr, windowNameEnc;
 
