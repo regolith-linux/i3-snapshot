@@ -32,6 +32,15 @@ To restore a layout from a file:
 $ i3-snapshot < layout.txt
 ```
 
+## Adding to an i3 config
+
+Bind i3-snapshot to keys such that layouts can be saved and restored like this:
+
+```
+bindsym $mod+comma  exec /usr/local/bin/i3-snapshot -o > /tmp/i3-snapshot.txt 
+bindsym $mod+period exec /usr/local/bin/i3-snapshot -c < /tmp/i3-snapshot.txt 
+```
+
 ## How to build
 
 ```
@@ -44,6 +53,12 @@ $ cmake ..
 $ make
 ...
 $ ./i3-snapshot
+```
+
+### and install (for now)
+
+```
+sudo cp i3-snapshot /usr/local/bin/
 ```
 
 ## Expectation of quality
