@@ -67,4 +67,4 @@ sudo cp i3-snapshot /usr/local/bin/
 
 ## Expectation of quality
 
-i3-snapshot should be considered experimental.
+i3-snapshot should be considered alpha quality.
