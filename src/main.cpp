@@ -32,6 +32,7 @@
 #include <i3ipc++/ipc.hpp>
 #include <cstring>
 #include <zconf.h>
+#include <iomanip>
 
 #include "base64.h"
 
@@ -55,6 +56,7 @@ struct CommandLineOptions {
     bool failFast;
     bool forceOutputMode;
     bool encodeStrings;
+    bool dryRun;
     WindowIdentifier windowIdentifier;
 };
 
@@ -147,19 +149,21 @@ moveWindow(const i3ipc::connection &i3conn, size_t windowId, const string &outpu
 
     if (opts.debug) cout << "i3-msg " << wsCmd << endl;
 
-    if (!i3conn.send_command(wsCmd)) return false;
+    if (!opts.dryRun && !i3conn.send_command(wsCmd)) return false;
 
     // Move window to workspace
     string windowCmd;
     // https://build.i3wm.org/docs/userguide.html#command_criteria
     if (opts.windowIdentifier == I3_ID) {
-        windowCmd = "[con_id=" + to_string(windowId) + "] move container to workspace \"" + workspaceName + "\"";
+        windowCmd = "[con_id=" + to_string(windowId) + "] move container to workspace " + workspaceName;
     } else {
-        windowCmd = "[title=\"" + windowTitle + "\"] move container to workspace \"" + workspaceName + "\"";
+        windowCmd = "[title=\"" + windowTitle + "\"] move container to workspace " + workspaceName;
     }
 
     if (opts.debug) cout << "i3-msg " << windowCmd << endl;
 
+    if (opts.dryRun) return true;
+    
     return i3conn.send_command(windowCmd);
 }
 
@@ -175,8 +179,8 @@ bool inputFromTerminal() {
 void printHelp() {
     cout
             << "Save and restore window containment in i3-wm.\n"
-            << "Usage: i3-snapshot [-d] [-v] [-c] [-r] [-t] [-o]\n"
-            << "-d: debug  -v: version  -c: ignore error  -r: raw strings  -t: match window title  -o: force output mode\n"
+            << "Usage: i3-snapshot [-d | --debug] [-v | --verbose] [-c | --continue] [-r | --rawstrings] [-t | --title] [-o | --output] [-y | --dryrun]\n"
+            << "-d: debug  -v: version  -c: ignore error  -r: raw strings  -t: match window title  -o: force output mode -y: dryrun\n"
             << "Generate a snapshot: i3-snapshot > snapshot.txt\n"
             << "Replay a snapshot: i3-snapshot < snapshot.txt"
             << endl;
@@ -199,6 +203,7 @@ CommandLineOptions parseOptions(int argc, char **argv) {
     options.failFast = true;
     options.forceOutputMode = false;
     options.encodeStrings = true;
+    options.dryRun = false;
     options.windowIdentifier = I3_ID;
 
     for (int i = 1; i < argc; i++) {
@@ -218,6 +223,9 @@ CommandLineOptions parseOptions(int argc, char **argv) {
             options.windowIdentifier = WINDOW_TITLE;
         } else if (strcmp(argv[i], "-o") == 0 || strcmp(argv[i], "--output") == 0) {
             options.forceOutputMode = true;
+        } else if (strcmp(argv[i], "-y") == 0 || strcmp(argv[i], "--dryrun") == 0) {
+            options.dryRun= true;
+            options.debug = true;
         } else {
             cout << "Unrecognized command line option: '" << argv[i] << "'.  Aborting." << endl;
             exit(1);
@@ -247,7 +255,10 @@ int main(int argc, char **argv) {
             string windowName = base64_decode(windowNameEnc);
             size_t windowId = stoul(windowIdStr);
 
-            if (!moveWindow(i3connection, windowId, outputName, workspaceName, workspaceId, windowName, opts)) {
+            std::stringstream escapedWorkspaceName;
+            escapedWorkspaceName << std::quoted(workspaceName);
+
+            if (!moveWindow(i3connection, windowId, outputName, escapedWorkspaceName.str(), workspaceId, windowName, opts)) {
                 cerr << "Failed to move " << windowId << " (" << windowName << ")." << endl;
 
                 if (opts.failFast) return 1;
