@@ -43,9 +43,11 @@ bindsym $mod+period exec /usr/local/bin/i3-snapshot -c < /tmp/i3-snapshot.txt
 
 ## How to build
 
+Direct dependencies are integrated via git submodules.  Additionally, the i3/ipc.h header file from the i3 package is required.
+
 ```
 $ git clone https://github.com/regolith-linux/i3-snapshot.git
-...
+...``
 $ cd i3-snapshot
 ...
 $ git submodule init
