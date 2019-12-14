@@ -48,6 +48,8 @@ $ git clone https://github.com/regolith-linux/i3-snapshot.git
 ...
 $ cd i3-snapshot
 ...
+$ git submodule init
+$ git submodule update
 $ mkdir build && cd build
 $ cmake ..
 $ make
