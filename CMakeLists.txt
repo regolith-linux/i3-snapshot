@@ -10,3 +10,7 @@ link_directories(${I3IPCpp_LIBRARY_DIRS})
 add_executable(i3-snapshot src/main.cpp lib/base64/base64.cpp)
 
 target_link_libraries(i3-snapshot ${I3IPCpp_LIBRARIES})
+
+install(TARGETS i3-snapshot
+  RUNTIME DESTINATION bin
+)

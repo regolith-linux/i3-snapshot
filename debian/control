@@ -1,0 +1,13 @@
+Source: i3-snapshot
+Section: x11
+Priority: extra
+Maintainer: Ken Gilmer <kgilmer@gmail.com>
+Build-Depends: cmake, cmake-data, debhelper (>=9), pkg-config, libsigc++-2.0-dev, libjsoncpp-dev, i3-wm, zlib1g-dev
+Standards-Version: 3.9.8
+Homepage: https://github.com/regolith-linux/i3-snapshot
+
+Package: i3-snapshot
+Architecture: any
+Multi-Arch: foreign
+Depends: ${misc:Depends}, ${shlibs:Depends}, i3-wm
+Description: Record and restore window and workspace containment structure in i3-wm

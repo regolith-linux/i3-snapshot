@@ -1,0 +1,12 @@
+i3-snapshot (1.0-1ubuntu1~ppa1) bionic; urgency=medium
+
+  * Handle workspace names with quotes.
+  * Add option to "dryrun" update i3 for debugging. 
+
+ -- Ken Gilmer <kgilmer@gmail.com>  Sat, 14 Dec 2019 19:00:11 -0800
+
+i3-snapshot (0.1-1ubuntu1ppa4) bionic; urgency=medium
+
+  * Initial release
+
+ -- Ken Gilmer <kgilmer@gmail.com>  Sun, 30 Jun 2019 18:56:33 -0700
