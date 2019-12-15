@@ -41,9 +41,13 @@ bindsym $mod+comma  exec /usr/local/bin/i3-snapshot -o > /tmp/i3-snapshot.txt
 bindsym $mod+period exec /usr/local/bin/i3-snapshot -c < /tmp/i3-snapshot.txt 
 ```
 
+## Install
+
+A Debian package `i3-snapshot` for Ubuntu is available at `ppa:kgilmer/speed-ricer` for Bionic, Disco, and Eoan releases.
+
 ## How to build
 
-Direct dependencies are integrated via git submodules.  Additionally, the i3/ipc.h header file from the i3 package is required.
+Direct dependencies are integrated via git submodules.  Additionally, the i3/ipc.h header file from the i3 package, `libjsoncpp-dev`, and `libsigc++-2.0-dev` are required.
 
 ```
 $ git clone https://github.com/regolith-linux/i3-snapshot.git
@@ -59,7 +63,7 @@ $ make
 $ ./i3-snapshot
 ```
 
-### and install (for now)
+### and install 
 
 ```
 sudo cp i3-snapshot /usr/local/bin/
