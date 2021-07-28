@@ -1,3 +1,11 @@
+i3-snapshot (1.0-2hirsute) hirsute; urgency=medium
+
+  [ Ken Gilmer ]
+  * Update readme w/ new install options, build details from https://github.com/regolith-linux/i3-snapshot/issues/1.
+  * Update copyright year
+
+ -- Regolith Linux <regolith.linux@gmail.com>  Tue, 27 Jul 2021 20:53:13 -0700
+
 i3-snapshot (1.0-1ubuntu1~ppa1) bionic; urgency=medium
 
   * Handle workspace names with quotes.
