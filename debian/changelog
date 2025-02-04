@@ -1,3 +1,17 @@
+i3-snapshot (1.1-1ubuntu1~ppa1) bionic; urgency=medium
+
+  [ Ken Gilmer ]
+  * Update readme w/ new install options, build details from https://github.com/regolith-linux/i3-snapshot/issues/1.
+
+  [ Khosrow Moossavi ]
+  * feat: enable github action to test pull requests
+  * feat: enable github action to publish to unstable
+  * feat: enable github action to publish to testing
+  * feat: enable github action to prepare release
+  * fix: create release tag from correct git sha
+
+ -- Regolith Linux <regolith.linux@gmail.com>  Tue, 04 Feb 2025 02:29:57 +0000
+
 i3-snapshot (1.0-1ubuntu1~ppa1) bionic; urgency=medium
 
   * Handle workspace names with quotes.
