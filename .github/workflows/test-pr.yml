@@ -34,15 +34,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Import GPG Key
-        uses: regolith-linux/actions/import-gpg@main
         with:
-          gpg-key: "${{ secrets.PACKAGE_PRIVATE_KEY2 }}"
+          submodules: "recursive"
 
       - name: Build Package
         uses: regolith-linux/actions/build-package@main
         with:
+          only-build: "true"
           name: "${{ github.event.repository.name }}"
           distro: "${{ matrix.distro }}"
           codename: "${{ matrix.codename }}"
