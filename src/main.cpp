@@ -30,6 +30,8 @@
 
 #include <iostream>
 #include <i3ipc++/ipc.hpp>
+#include <i3ipc++/ipc-util.hpp>
+#include <json/json.h>
 #include <cstring>
 #include <zconf.h>
 #include <iomanip>
@@ -62,11 +64,12 @@ struct CommandLineOptions {
 
 /**
  * Determine if the i3 container is a window type.
- * @param c i3 container
+ * @param c i3 container (a node of the GET_TREE reply)
  * @return true if container is window, false otherwise.
  */
-bool isWindow(const i3ipc::container_t &c) {
-    return c.type == "con" && c.xwindow_id != 0;
+bool isWindow(const Json::Value &c) {
+    const Json::Value &window = c["window"];
+    return c["type"].asString() == "con" && window.isIntegral() && window.asUInt64() != 0;
 }
 
 /**
@@ -74,8 +77,27 @@ bool isWindow(const i3ipc::container_t &c) {
  * @param c i3 container
  * @return true if container is valid, false otherwise.
  */
-bool isValidParent(const i3ipc::container_t &c) {
-    return c.type != "dockarea";
+bool isValidParent(const Json::Value &c) {
+    return c["type"].asString() != "dockarea";
+}
+
+/**
+ * Read i3's layout tree. i3ipc++'s get_tree() drops the floating_nodes of
+ * each container, so the tree is read and parsed here.
+ * @return the GET_TREE reply
+ */
+Json::Value getTree() {
+    int32_t sockfd = i3ipc::i3_connect(i3ipc::get_socketpath());
+    auto buf = i3ipc::i3_msg(sockfd, i3ipc::ClientMessageType::GET_TREE);
+    i3ipc::i3_disconnect(sockfd);
+
+    Json::Value root;
+    Json::Reader reader;
+    if (!reader.parse(string(buf->payload, buf->header->size), root, false)) {
+        cerr << "Failed to parse the i3 tree: " << reader.getFormattedErrorMessages() << endl;
+        exit(1);
+    }
+    return root;
 }
 
 /**
@@ -84,12 +106,15 @@ bool isValidParent(const i3ipc::container_t &c) {
  * @param c i3 container
  * @param treeState storage of current state of tree traversal.
  */
-void findWindows(const i3ipc::container_t &c, TreeState &treeState, CommandLineOptions &options) {
-    if (c.type == "output") {
-        treeState.outputName = c.name;
-    } else if (c.type == "workspace") {
-        treeState.workspaceName = c.name;
-        treeState.workspaceId = c.id;
+void findWindows(const Json::Value &c, TreeState &treeState, CommandLineOptions &options) {
+    const string type = c["type"].asString();
+    const string name = c["name"].asString();
+
+    if (type == "output") {
+        treeState.outputName = name;
+    } else if (type == "workspace") {
+        treeState.workspaceName = name;
+        treeState.workspaceId = c["id"].asUInt64();
     } else if (isWindow(c)) {
         if (treeState.outputName.empty() || treeState.workspaceName.empty()) {
             cout << "Invalid tree state, aborting." << endl;
@@ -107,22 +132,26 @@ void findWindows(const i3ipc::container_t &c, TreeState &treeState, CommandLineO
                     reinterpret_cast<const unsigned char *>(treeState.workspaceName.c_str()),
                     treeState.workspaceName.length());
             windowEncoded = base64_encode(
-                    reinterpret_cast<const unsigned char *>(c.name.c_str()),
-                    c.name.length());
+                    reinterpret_cast<const unsigned char *>(name.c_str()),
+                    name.length());
         } else {
             outputEncoded = treeState.outputName;
             workspaceEncoded = treeState.workspaceName;
-            windowEncoded = c.name;
+            windowEncoded = name;
         }
 
         // Output Name, Workspace Name, Workspace Id, Window Id, Window Name
-        cout << outputEncoded << " " << workspaceEncoded << " " <<  treeState.workspaceId << " " << c.id << " "
+        cout << outputEncoded << " " << workspaceEncoded << " " <<  treeState.workspaceId << " " << c["id"].asUInt64() << " "
              << windowEncoded << endl;
     }
 
-    if (isValidParent(c))
-        for (auto &node : c.nodes)
-            findWindows(*node, treeState, options);
+    if (isValidParent(c)) {
+        // Tiled windows are in nodes, floating ones in floating_nodes
+        for (const auto &node : c["nodes"])
+            findWindows(node, treeState, options);
+        for (const auto &node : c["floating_nodes"])
+            findWindows(node, treeState, options);
+    }
 }
 
 /**
@@ -149,7 +178,10 @@ moveWindow(const i3ipc::connection &i3conn, size_t windowId, const string &outpu
 
     if (opts.debug) cout << "i3-msg " << wsCmd << endl;
 
-    if (!opts.dryRun && !i3conn.send_command(wsCmd)) return false;
+    // This fails when the workspace no longer exists. Moving the window
+    // below creates it again, and the workspace is then moved through the
+    // window.
+    bool workspaceMoved = opts.dryRun || i3conn.send_command(wsCmd);
 
     // Move window to workspace
     string windowCmd;
@@ -163,8 +195,21 @@ moveWindow(const i3ipc::connection &i3conn, size_t windowId, const string &outpu
     if (opts.debug) cout << "i3-msg " << windowCmd << endl;
 
     if (opts.dryRun) return true;
-    
-    return i3conn.send_command(windowCmd);
+
+    if (!i3conn.send_command(windowCmd)) return false;
+    if (workspaceMoved) return true;
+
+    string windowCriteria;
+    if (opts.windowIdentifier == I3_ID) {
+        windowCriteria = "[con_id=" + to_string(windowId) + "]";
+    } else {
+        windowCriteria = "[title=\"" + windowTitle + "\"]";
+    }
+    string recreatedWsCmd = windowCriteria + " move workspace to output " + outputName;
+
+    if (opts.debug) cout << "i3-msg " << recreatedWsCmd << endl;
+
+    return i3conn.send_command(recreatedWsCmd);
 }
 
 /**
@@ -242,7 +287,7 @@ int main(int argc, char **argv) {
     TreeState treeState;
 
     if (opts.forceOutputMode || !inputFromTerminal()) {
-        findWindows(*i3connection.get_tree(), treeState, opts);
+        findWindows(getTree(), treeState, opts);
     } else {
         string outputNameEnc, workspaceNameEnc, workspaceIdStr, windowIdStr, windowNameEnc;
 
