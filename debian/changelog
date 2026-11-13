@@ -1,3 +1,10 @@
+i3-snapshot (1.1.1) bionic; urgency=medium
+
+  [ rego-port-bot ]
+  * fix: record floating windows and restore windows whose workspace is gone
+
+ -- Ken Gilmer <kgilmer@gmail.com>  Fri, 13 Nov 2026 15:58:24 -0800
+
 i3-snapshot (1.1-2ubuntu1-ppa2) bionic; urgency=medium
 
   * fix: build with CMake >= 4 by setting
