@@ -14,7 +14,11 @@ i3-snapshot has two modes:
 
 This program is intended to be used when window layouts are mangled by display hotplug events or other changes that cause i3wm to restructure the containment layout.
 
-i3-snapshot employs a 'best effort' and 'fail-fast' strategy.  This means that it does little validation and aborts execution upon any failure.
+i3-snapshot employs a 'best effort' and 'fail-fast' strategy: a restore stops at the first window it fails to move, unless `-c` is given.
+
+A restore reads and checks the whole snapshot before it sends anything to i3. If any line is malformed, it reports each bad line on stderr (`line N: ...`) and exits with status 1 without moving anything. Names and titles read from the snapshot reach i3 as single quoted arguments. With `-t`, a window or workspace is chosen only when its title or name matches exactly.
+
+A snapshot saved with `-r` (raw strings) is restored with `-r`. Saving with `-r` fails when an output or workspace name contains a space or a line break, or a title contains a line break, because such a snapshot could not be read back. Save without `-r` in that case. `-y` (dry run) prints the i3 commands a restore would send, without connecting to i3.
 
 The output is meant to be somewhat human readable for basic troubleshooting purposes.
 
@@ -62,6 +66,8 @@ $ make
 ...
 $ ./i3-snapshot
 ```
+
+Run the tests from the build directory with `ctest`.
 
 ### and install 
 

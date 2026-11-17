@@ -14,6 +14,11 @@ add_executable(i3-snapshot src/main.cpp lib/base64/base64.cpp)
 
 target_link_libraries(i3-snapshot ${I3IPCpp_LIBRARIES})
 
+enable_testing()
+add_test(NAME restore-dry-run
+  COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/restore-dry-run.sh $<TARGET_FILE:i3-snapshot>
+)
+
 install(TARGETS i3-snapshot
   RUNTIME DESTINATION bin
 )
